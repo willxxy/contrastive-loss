@@ -7,12 +7,7 @@ class ConditionalContrastiveLoss(nn.Module):
     similar_target: float = 0.9
     dissimilar_target: float = 0.1
     
-    def setup(self):
-
-        self.similar_types = {"synonym_noun", "synonym_verb", "out_set"}
-
-    def __call__(self, image_embeddings, pos_text_embeddings, neg_text_embeddings, transform_types):
-
+    def __call__(self, image_embeddings, pos_text_embeddings, neg_text_embeddings, transform_indices):
         image_embeddings = jnp.mean(image_embeddings, axis=1)  # -> (B, D)
         pos_text_embeddings = jnp.mean(pos_text_embeddings, axis=1)  # -> (B, D)
         neg_text_embeddings = jnp.mean(neg_text_embeddings, axis=1)  # -> (B, D)
@@ -27,17 +22,22 @@ class ConditionalContrastiveLoss(nn.Module):
 
         s_pos = jnp.sum(image_embeddings_norm * pos_text_embeddings_norm, axis=-1)
         s_neg = jnp.sum(image_embeddings_norm * neg_text_embeddings_norm, axis=-1)
-
-        is_similar = jnp.array([1.0 if t in self.similar_types else 0.0 for t in transform_types])
+        
+        similar_indices = jnp.array([1, 2, 5])
+        
+        is_similar = jnp.sum(
+            jnp.expand_dims(transform_indices, -1) == jnp.expand_dims(similar_indices, 0),
+            axis=-1
+        ).astype(jnp.float32)
         
         loss_pos = (1.0 - s_pos) ** 2
         
-        targets = jnp.where(is_similar == 1.0, 
+        targets = jnp.where(is_similar > 0, 
                             self.similar_target, 
                             self.dissimilar_target)
         
         loss_neg = jnp.where(
-            is_similar == 1.0,
+            is_similar > 0,
             (targets - s_neg) ** 2,
             (s_neg - targets) ** 2
         )
@@ -61,24 +61,24 @@ def main():
     key, subkey = jax.random.split(key)
     neg_text_embeddings = jax.random.normal(subkey, (batch_size, text_seq_len, embed_dim))
     
-    transform_types = ["synonym_noun", "antonym", "out_set", "random_change"]
+    transform_indices = [0, 1, 2, 3]
     
     loss_module = ConditionalContrastiveLoss()
     
     params = {}
     
     loss_value = loss_module.apply(params, image_embeddings, pos_text_embeddings, 
-                                  neg_text_embeddings, transform_types)
+                                  neg_text_embeddings, transform_indices)
     
     print(f"Computed loss value: {loss_value}")
     
-    all_similar = ["synonym_noun", "synonym_verb", "out_set", "out_set"]
+    all_similar = [1, 2, 5, 5]
     loss_similar = loss_module.apply(params, image_embeddings, pos_text_embeddings, 
                                     neg_text_embeddings, all_similar)
     
     print(f"Loss with all similar transformations: {loss_similar}")
     
-    all_dissimilar = ["antonym", "random_change", "negation", "other"]
+    all_dissimilar = [3, 4, 6, 7]
     loss_dissimilar = loss_module.apply(params, image_embeddings, pos_text_embeddings, 
                                        neg_text_embeddings, all_dissimilar)
     
