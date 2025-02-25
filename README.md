@@ -4,8 +4,8 @@ conditional contrastive loss in jax and pytorch inspired by https://arxiv.org/pd
 ## Run
 For jax (flax==0.10.2, jax[cuda12]==0.5.0)
 
-python contrast_loss_jax.py
+`python contrast_loss_jax.py`
 
 For torch (torch==2.2.0)
 
-python contrast_loss_torch.py
+`python contrast_loss_torch.py`
